@@ -3,15 +3,20 @@
 #include <FlexCAN.h>
 #include <TeensyCANBase.h>
 
-Encoder encoder(5, 6);
+Encoder wheelEncoder(5, 6);
+Encoder turretEncoder(9, 10);
 
 const int numberPixels = 34;
 
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(numberPixels, 14, NEO_GRB + NEO_KHZ800);
 
-long lastRead = 0;
-long pos = -999;
-long rate = 0;
+long wheelLastRead = 0;
+long wheelPos = -999;
+long wheelRate = 0;
+
+long turretLastRead = 0;
+long turretPos = -999;
+long turretRate = 0;
 
 int mode = 0;
 int value = 0;
@@ -20,12 +25,14 @@ int G = 0;
 int B = 0;
 int led_idx = 0;
 
-int sendEncoder(byte* msg, byte* resp) {
+int sendWheelEncoder(byte* msg, byte* resp) {
   if (msg[0] == 0) {
-    resp[0] = pos & 0xff;
-    resp[1] = (pos >> 8) & 0xff;
-    resp[2] = (pos >> 16) & 0xff;
-    resp[3] = (pos >> 24) & 0xff;
+    resp[0] = wheelPos & 0xff;
+    resp[1] = (wheelPos >> 8) & 0xff;
+    resp[2] = (wheelPos >> 16) & 0xff;
+    resp[3] = (wheelPos >> 24) & 0xff;
+
+    Serial.println(wheelPos);
 
     resp[4] = 0; // Mode
 
@@ -36,10 +43,10 @@ int sendEncoder(byte* msg, byte* resp) {
     return 0;
   }
   else if (msg[0] == 1) {
-    resp[0] = rate & 0xff;
-    resp[1] = (rate >> 8) & 0xff;
-    resp[2] = (rate >> 16) & 0xff;
-    resp[3] = (rate >> 24) & 0xff;
+    resp[0] = wheelRate & 0xff;
+    resp[1] = (wheelRate >> 8) & 0xff;
+    resp[2] = (wheelRate >> 16) & 0xff;
+    resp[3] = (wheelRate >> 24) & 0xff;
 
     resp[4] = 1; // Mode
 
@@ -50,9 +57,48 @@ int sendEncoder(byte* msg, byte* resp) {
     return 0;
   }
   else if (msg[0] == 0x72 && msg[1] == 0x65 && msg[2] == 0x73 && msg[3] == 0x65 && msg[4] == 0x74 && msg[5] == 0x65 && msg[6] == 0x6e && msg[7] == 0x63) {
-    encoder.write(0);
-    pos = 0;
-    rate = 0;
+    wheelEncoder.write(0);
+    wheelPos = 0;
+    wheelRate = 0;
+    Serial.println("reset");
+    return 1;
+  }
+  return 1;
+}
+
+int sendTurretEncoder(byte* msg, byte* resp) {
+  if (msg[0] == 0) {
+    resp[0] = turretPos & 0xff;
+    resp[1] = (turretPos >> 8) & 0xff;
+    resp[2] = (turretPos >> 16) & 0xff;
+    resp[3] = (turretPos >> 24) & 0xff;
+
+    resp[4] = 0; // Mode
+
+    for (int i = 5; i < 8; i++) {
+      resp[i] = 0;
+    }
+
+    return 0;
+  }
+  else if (msg[0] == 1) {
+    resp[0] = turretRate & 0xff;
+    resp[1] = (turretRate >> 8) & 0xff;
+    resp[2] = (turretRate >> 16) & 0xff;
+    resp[3] = (turretRate >> 24) & 0xff;
+
+    resp[4] = 1; // Mode
+
+    for (int i = 5; i < 8; i++) {
+      resp[i] = 0;
+    }
+
+    return 0;
+  }
+  else if (msg[0] == 0x72 && msg[1] == 0x65 && msg[2] == 0x73 && msg[3] == 0x65 && msg[4] == 0x74 && msg[5] == 0x65 && msg[6] == 0x6e && msg[7] == 0x63) {
+    turretEncoder.write(0);
+    turretPos = 0;
+    turretRate = 0;
     Serial.println("reset");
     return 1;
   }
@@ -81,7 +127,8 @@ int changeLEDs(byte* msg, byte* resp) {
 
 void setup(void) {
   CAN_add_id(0x602, &changeLEDs);
-  CAN_add_id(0x610, &sendEncoder);
+  CAN_add_id(0x606, &sendTurretEncoder);
+  CAN_add_id(0x612, &sendWheelEncoder);
   CAN_begin();
   pixels.begin();
   delay(1000);
@@ -94,15 +141,27 @@ void loop(void) {
   update_pixels();
   pixels.show();
 
-  long newPos = encoder.read();
-  if (newPos != pos) {
-    rate = ((double) 1000000.0 * (newPos - pos)) / ((double) (micros() - lastRead));
-    pos = newPos;
-    lastRead = micros();
+  long newPos = wheelEncoder.read();
+  if (newPos != wheelPos) {
+    wheelRate = ((double) 1000000.0 * (newPos - wheelPos)) / ((double) (micros() - wheelLastRead));
+    wheelPos = newPos;
+    wheelLastRead = micros();
   }
   else {
-    if ((micros() - lastRead) > 1000) {
-      rate = 0;
+    if ((micros() - wheelLastRead) > 1000) {
+      wheelRate = 0;
+    }
+  }
+
+  newPos = turretEncoder.read();
+  if (newPos != turretPos) {
+    turretRate = ((double) 1000000.0 * (newPos - turretPos)) / ((double) (micros() - turretLastRead));
+    turretPos = newPos;
+    turretLastRead = micros();
+  }
+  else {
+    if ((micros() - turretLastRead) > 1000) {
+      turretRate = 0;
     }
   }
 }
