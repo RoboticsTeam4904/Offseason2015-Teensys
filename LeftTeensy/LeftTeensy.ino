@@ -20,72 +20,40 @@ int G = 0;
 int B = 0;
 int led_idx = 0;
 
-int sendEncoder(byte* msg, byte* resp) {
-  if (msg[0] == 0) {
-    resp[0] = pos & 0xff;
-    resp[1] = (pos >> 8) & 0xff;
-    resp[2] = (pos >> 16) & 0xff;
-    resp[3] = (pos >> 24) & 0xff;
-
-    resp[4] = 0; // Mode
-
-    for (int i = 5; i < 8; i++) {
-      resp[i] = 0;
-    }
-
-    return 0;
-  }
-  else if (msg[0] == 1) {
-    resp[0] = rate & 0xff;
-    resp[1] = (rate >> 8) & 0xff;
-    resp[2] = (rate >> 16) & 0xff;
-    resp[3] = (rate >> 24) & 0xff;
-
-    resp[4] = 1; // Mode
-
-    for (int i = 5; i < 8; i++) {
-      resp[i] = 0;
-    }
-
-    return 0;
-  }
-  else if (msg[0] == 0x72 && msg[1] == 0x65 && msg[2] == 0x73 && msg[3] == 0x65 && msg[4] == 0x74 && msg[5] == 0x65 && msg[6] == 0x6e && msg[7] == 0x63) {
+void resetEncoder(byte* msg) {
+  if (msg[0] == 0x72 && msg[1] == 0x65 && msg[2] == 0x73 && msg[3] == 0x65 && msg[4] == 0x74 && msg[5] == 0x65 && msg[6] == 0x6e && msg[7] == 0x63) {
     encoder.write(0);
     pos = 0;
     rate = 0;
     Serial.println("reset");
-    return 1;
   }
-  return 1;
 }
 
-int changeLEDs(byte* msg, byte* resp) {
+void changeLEDs(byte* msg) {
   mode = msg[6] + (msg[7] << 8);
   value = msg[4] + (msg[5] << 8);
   R = msg[2];
   G = msg[1];
   B = msg[0];
-  Serial.print(mode);
-  Serial.print("\t");
-  Serial.print(value);
-  Serial.print("\t");
-  Serial.print(R);
-  Serial.print("\t");
-  Serial.print(G);
-  Serial.print("\t");
-  Serial.print(B);
-  Serial.println();
-
-  return 0;
 }
 
 void setup(void) {
   CAN_add_id(0x601, &changeLEDs);
-  CAN_add_id(0x611, &sendEncoder);
+  CAN_add_id(0x611, &resetEncoder);
   CAN_begin();
   pixels.begin();
   delay(1000);
   Serial.println("Teensy 3.X CAN Encoder");
+}
+
+void writeLong(uint32_t id, long value1, long value2){
+  byte * msg = new byte[8];
+  memcpy(msg, &value1, sizeof(long));
+  memcpy(&msg[4], &value2, sizeof(long));
+
+  CAN_write(id, msg);
+
+  delete msg;
 }
 
 void loop(void) {
@@ -105,6 +73,11 @@ void loop(void) {
       rate = 0;
     }
   }
+
+  writeLong(0x611, pos, 0); // Position
+  writeLong(0x611, rate, 1); // Rate
+
+  delay(10);
 }
 
 void update_pixels(){

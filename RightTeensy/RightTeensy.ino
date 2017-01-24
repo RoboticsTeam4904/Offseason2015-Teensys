@@ -18,6 +18,9 @@ long turretLastRead = 0;
 long turretPos = -999;
 long turretRate = 0;
 
+const int rightTurretHallEffect = 12;
+const int leftTurretHallEffect = 11;
+
 int mode = 0;
 int value = 0;
 int R = 0;
@@ -25,114 +28,52 @@ int G = 0;
 int B = 0;
 int led_idx = 0;
 
-int sendWheelEncoder(byte* msg, byte* resp) {
-  if (msg[0] == 0) {
-    resp[0] = wheelPos & 0xff;
-    resp[1] = (wheelPos >> 8) & 0xff;
-    resp[2] = (wheelPos >> 16) & 0xff;
-    resp[3] = (wheelPos >> 24) & 0xff;
-
-    Serial.println(wheelPos);
-
-    resp[4] = 0; // Mode
-
-    for (int i = 5; i < 8; i++) {
-      resp[i] = 0;
-    }
-
-    return 0;
-  }
-  else if (msg[0] == 1) {
-    resp[0] = wheelRate & 0xff;
-    resp[1] = (wheelRate >> 8) & 0xff;
-    resp[2] = (wheelRate >> 16) & 0xff;
-    resp[3] = (wheelRate >> 24) & 0xff;
-
-    resp[4] = 1; // Mode
-
-    for (int i = 5; i < 8; i++) {
-      resp[i] = 0;
-    }
-
-    return 0;
-  }
-  else if (msg[0] == 0x72 && msg[1] == 0x65 && msg[2] == 0x73 && msg[3] == 0x65 && msg[4] == 0x74 && msg[5] == 0x65 && msg[6] == 0x6e && msg[7] == 0x63) {
+void resetWheelEncoder(byte* msg) {
+  if (msg[0] == 0x72 && msg[1] == 0x65 && msg[2] == 0x73 && msg[3] == 0x65 && msg[4] == 0x74 && msg[5] == 0x65 && msg[6] == 0x6e && msg[7] == 0x63) {
     wheelEncoder.write(0);
     wheelPos = 0;
     wheelRate = 0;
     Serial.println("reset");
-    return 1;
   }
-  return 1;
 }
 
-int sendTurretEncoder(byte* msg, byte* resp) {
-  if (msg[0] == 0) {
-    resp[0] = turretPos & 0xff;
-    resp[1] = (turretPos >> 8) & 0xff;
-    resp[2] = (turretPos >> 16) & 0xff;
-    resp[3] = (turretPos >> 24) & 0xff;
-
-    resp[4] = 0; // Mode
-
-    for (int i = 5; i < 8; i++) {
-      resp[i] = 0;
-    }
-
-    return 0;
-  }
-  else if (msg[0] == 1) {
-    resp[0] = turretRate & 0xff;
-    resp[1] = (turretRate >> 8) & 0xff;
-    resp[2] = (turretRate >> 16) & 0xff;
-    resp[3] = (turretRate >> 24) & 0xff;
-
-    resp[4] = 1; // Mode
-
-    for (int i = 5; i < 8; i++) {
-      resp[i] = 0;
-    }
-
-    return 0;
-  }
-  else if (msg[0] == 0x72 && msg[1] == 0x65 && msg[2] == 0x73 && msg[3] == 0x65 && msg[4] == 0x74 && msg[5] == 0x65 && msg[6] == 0x6e && msg[7] == 0x63) {
+void resetTurretEncoder(byte* msg) {
+  if (msg[0] == 0x72 && msg[1] == 0x65 && msg[2] == 0x73 && msg[3] == 0x65 && msg[4] == 0x74 && msg[5] == 0x65 && msg[6] == 0x6e && msg[7] == 0x63) {
     turretEncoder.write(0);
     turretPos = 0;
     turretRate = 0;
     Serial.println("reset");
-    return 1;
   }
-  return 1;
 }
 
-int changeLEDs(byte* msg, byte* resp) {
+void changeLEDs(byte* msg) {
   mode = msg[6] + (msg[7] << 8);
   value = msg[4] + (msg[5] << 8);
   R = msg[2];
   G = msg[1];
   B = msg[0];
-  Serial.print(mode);
-  Serial.print("\t");
-  Serial.print(value);
-  Serial.print("\t");
-  Serial.print(R);
-  Serial.print("\t");
-  Serial.print(G);
-  Serial.print("\t");
-  Serial.print(B);
-  Serial.println();
-
-  return 0;
 }
 
 void setup(void) {
   CAN_add_id(0x602, &changeLEDs);
-  CAN_add_id(0x606, &sendTurretEncoder);
-  CAN_add_id(0x612, &sendWheelEncoder);
+  CAN_add_id(0x606, &resetTurretEncoder);
+  CAN_add_id(0x612, &resetWheelEncoder);
   CAN_begin();
   pixels.begin();
   delay(1000);
   Serial.println("Teensy 3.X CAN Encoder");
+  pinMode(leftTurretHallEffect, INPUT); // Left hall effect
+  pinMode(rightTurretHallEffect, INPUT); // Right hall effect
+}
+
+void writeLong(uint32_t id, long value1, long value2){
+  byte * msg = new byte[8];
+  memcpy(msg, &value1, sizeof(long));
+  memcpy(&msg[4], &value2, sizeof(long));
+
+  CAN_write(id, msg);
+
+  delete msg;
 }
 
 void loop(void) {
@@ -153,6 +94,9 @@ void loop(void) {
     }
   }
 
+  writeLong(0x612, wheelPos, 0); // Position
+  writeLong(0x612, wheelRate, 1); // Rate
+
   newPos = turretEncoder.read();
   if (newPos != turretPos) {
     turretRate = ((double) 1000000.0 * (newPos - turretPos)) / ((double) (micros() - turretLastRead));
@@ -164,6 +108,17 @@ void loop(void) {
       turretRate = 0;
     }
   }
+  if(!digitalRead(leftTurretHallEffect)){
+    turretEncoder.write(11100);
+  }
+  if(!digitalRead(rightTurretHallEffect)){
+    turretEncoder.write(0);
+  }
+
+  writeLong(0x606, turretPos, 0); // Position
+  writeLong(0x606, turretRate, 1); // Rate
+
+  delay(10);
 }
 
 void update_pixels(){
