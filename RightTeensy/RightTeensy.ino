@@ -4,7 +4,6 @@
 #include <TeensyCANBase.h>
 
 Encoder wheelEncoder(5, 6);
-Encoder turretEncoder(9, 10);
 
 const int numberPixels = 34;
 
@@ -13,13 +12,6 @@ Adafruit_NeoPixel pixels = Adafruit_NeoPixel(numberPixels, 14, NEO_GRB + NEO_KHZ
 long wheelLastRead = 0;
 long wheelPos = -999;
 long wheelRate = 0;
-
-long turretLastRead = 0;
-long turretPos = -999;
-long turretRate = 0;
-
-const int rightTurretHallEffect = 12;
-const int leftTurretHallEffect = 11;
 
 int mode = 0;
 int value = 0;
@@ -37,15 +29,6 @@ void resetWheelEncoder(byte* msg) {
   }
 }
 
-void resetTurretEncoder(byte* msg) {
-  if (msg[0] == 0x72 && msg[1] == 0x65 && msg[2] == 0x73 && msg[3] == 0x65 && msg[4] == 0x74 && msg[5] == 0x65 && msg[6] == 0x6e && msg[7] == 0x63) {
-    turretEncoder.write(0);
-    turretPos = 0;
-    turretRate = 0;
-    Serial.println("reset");
-  }
-}
-
 void changeLEDs(byte* msg) {
   mode = msg[6] + (msg[7] << 8);
   value = msg[4] + (msg[5] << 8);
@@ -56,14 +39,11 @@ void changeLEDs(byte* msg) {
 
 void setup(void) {
   CAN_add_id(0x602, &changeLEDs);
-  CAN_add_id(0x606, &resetTurretEncoder);
   CAN_add_id(0x612, &resetWheelEncoder);
   CAN_begin();
   pixels.begin();
   delay(1000);
   Serial.println("Teensy 3.X CAN Encoder");
-  pinMode(leftTurretHallEffect, INPUT); // Left hall effect
-  pinMode(rightTurretHallEffect, INPUT); // Right hall effect
 }
 
 void writeLong(uint32_t id, long value1, long value2){
@@ -96,27 +76,6 @@ void loop(void) {
 
   writeLong(0x612, wheelPos, 0); // Position
   writeLong(0x612, wheelRate, 1); // Rate
-
-  newPos = turretEncoder.read();
-  if (newPos != turretPos) {
-    turretRate = ((double) 1000000.0 * (newPos - turretPos)) / ((double) (micros() - turretLastRead));
-    turretPos = newPos;
-    turretLastRead = micros();
-  }
-  else {
-    if ((micros() - turretLastRead) > 1000) {
-      turretRate = 0;
-    }
-  }
-  if(!digitalRead(leftTurretHallEffect)){
-    turretEncoder.write(11100);
-  }
-  if(!digitalRead(rightTurretHallEffect)){
-    turretEncoder.write(0);
-  }
-
-  writeLong(0x606, turretPos, 0); // Position
-  writeLong(0x606, turretRate, 1); // Rate
 
   delay(10);
 }
