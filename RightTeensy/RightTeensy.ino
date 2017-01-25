@@ -79,7 +79,7 @@ void loop(void) {
     }
   }
 
-  writeLong(0x612, wheelPos, wheelRate); // Position
+  writeLongs(0x612, wheelPos, wheelRate); // Position
 
   delay(10);
 }

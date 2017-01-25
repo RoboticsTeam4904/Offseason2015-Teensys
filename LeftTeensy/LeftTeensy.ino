@@ -79,7 +79,7 @@ void loop(void) {
     }
   }
 
-  writeLong(0x611, pos, rate); // Position
+  writeLongs(0x611, pos, rate); // Position
   
   delay(10);
 }
