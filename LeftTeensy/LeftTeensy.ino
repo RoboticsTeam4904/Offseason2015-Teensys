@@ -46,11 +46,16 @@ void setup(void) {
   Serial.println("Teensy 3.X CAN Encoder");
 }
 
-void writeLong(uint32_t id, long value1, long value2){
+void writeLongs(uint32_t id, long value1, long value2){
   byte * msg = new byte[8];
-  memcpy(msg, &value1, sizeof(long));
-  memcpy(&msg[4], &value2, sizeof(long));
 
+  for(int i = 0; i < 4; i++){
+    msg[i] = (value1 >> i*8) & 0xFF;
+  }
+  for(int i = 0; i < 4; i++){
+    msg[i + 4] = (value2 >> i*8) & 0xFF;
+  }
+  
   CAN_write(id, msg);
 
   delete msg;
@@ -74,9 +79,8 @@ void loop(void) {
     }
   }
 
-  writeLong(0x611, pos, 0); // Position
-  writeLong(0x611, rate, 1); // Rate
-
+  writeLong(0x611, pos, rate); // Position
+  
   delay(10);
 }
 
